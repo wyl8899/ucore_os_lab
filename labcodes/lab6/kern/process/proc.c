@@ -87,7 +87,7 @@ static struct proc_struct *
 alloc_proc(void) {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL) {
-    //LAB4:EXERCISE1 YOUR CODE
+    //LAB4:EXERCISE1 2014011434
     /*
      * below fields in proc_struct need to be initialized
      *       enum proc_state state;                      // Process state
@@ -103,7 +103,7 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
-     //LAB5 YOUR CODE : (update LAB4 steps)
+     //LAB5 2014011434 : (update LAB4 steps)
     /*
      * below fields(add in LAB5) in proc_struct need to be initialized	
      *       uint32_t wait_state;                        // waiting state
@@ -119,6 +119,26 @@ alloc_proc(void) {
      *     uint32_t lab6_stride;                       // FOR LAB6 ONLY: the current stride of the process
      *     uint32_t lab6_priority;                     // FOR LAB6 ONLY: the priority of process, set by lab6_set_priority(uint32_t)
      */
+        proc->state = PROC_UNINIT;
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = 0;
+        proc->mm = 0;
+        memset(&(proc->context), 0, sizeof(proc->context));
+        proc->tf = 0;
+        proc->cr3 = boot_cr3;
+        proc->flags = 0;
+        memset(proc->name, 0, sizeof(proc->name));
+        proc->wait_state = 0;
+        proc->cptr = proc->yptr = proc->optr = 0;
+        proc->rq = 0;
+        list_init(&(proc->run_link));
+        memset(&(proc->lab6_run_pool), sizeof(skew_heap_entry_t), 0);
+        proc->time_slice = 0;
+        proc->lab6_stride = 0;
+        proc->lab6_priority = 0;
     }
     return proc;
 }
@@ -380,7 +400,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
         goto fork_out;
     }
     ret = -E_NO_MEM;
-    //LAB4:EXERCISE2 YOUR CODE
+    //LAB4:EXERCISE2 2014011434
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
      * MACROs or Functions:
@@ -406,14 +426,24 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
 
-	//LAB5 YOUR CODE : (update LAB4 steps)
+	//LAB5 2014011434 : (update LAB4 steps)
    /* Some Functions
     *    set_links:  set the relation links of process.  ALSO SEE: remove_links:  lean the relation links of process 
     *    -------------------
 	*    update step 1: set child proc's parent to current process, make sure current process's wait_state is 0
 	*    update step 5: insert proc_struct into hash_list && proc_list, set the relation links of process
     */
-	
+    proc = alloc_proc();
+    proc->parent = current;
+    proc->wait_state = 0;
+    setup_kstack(proc);
+    copy_mm(clone_flags, proc);
+    copy_thread(proc, stack, tf);
+    ret = proc->pid = get_pid();
+    hash_proc(proc);
+    set_links(proc);
+    wakeup_proc(proc);
+
 fork_out:
     return ret;
 
@@ -603,7 +633,7 @@ load_icode(unsigned char *binary, size_t size) {
     //(6) setup trapframe for user environment
     struct trapframe *tf = current->tf;
     memset(tf, 0, sizeof(struct trapframe));
-    /* LAB5:EXERCISE1 YOUR CODE
+    /* LAB5:EXERCISE1 2014011434
      * should set tf_cs,tf_ds,tf_es,tf_ss,tf_esp,tf_eip,tf_eflags
      * NOTICE: If we set trapframe correctly, then the user level process can return to USER MODE from kernel. So
      *          tf_cs should be USER_CS segment (see memlayout.h)
@@ -612,6 +642,11 @@ load_icode(unsigned char *binary, size_t size) {
      *          tf_eip should be the entry point of this binary program (elf->e_entry)
      *          tf_eflags should be set to enable computer to produce Interrupt
      */
+    tf->tf_cs = USER_CS;
+    tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+    tf->tf_esp = USTACKTOP;
+    tf->tf_eip = elf->e_entry;
+    tf->tf_eflags = FL_IF;
     ret = 0;
 out:
     return ret;
