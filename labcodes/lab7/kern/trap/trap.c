@@ -42,7 +42,7 @@ static struct pseudodesc idt_pd = {
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {
-     /* LAB1 YOUR CODE : STEP 2 */
+     /* LAB1 2014011434 : STEP 2 */
      /* (1) Where are the entry addrs of each Interrupt Service Routine (ISR)?
       *     All ISR's entry addrs are stored in __vectors. where is uintptr_t __vectors[] ?
       *     __vectors[] is in kern/trap/vector.S which is produced by tools/vector.c
@@ -57,6 +57,21 @@ idt_init(void) {
      /* LAB5 YOUR CODE */ 
      //you should update your lab1 code (just add ONE or TWO lines of code), let user app to use syscall to get the service of ucore
      //so you should setup the syscall interrupt gate in here
+    extern uintptr_t __vectors[];
+    unsigned i;
+    for (i = 0; i < 256; ++i) {
+        bool istrap = 0;
+        uint16_t segment_selector = 0x8;
+        uint32_t offset = __vectors[i];
+        uint16_t dpl;
+        if (i == T_SWITCH_TOK || i == T_SYSCALL) {
+            dpl = DPL_USER;
+        } else {
+            dpl = DPL_KERNEL;
+        }
+        SETGATE(idt[i], istrap, segment_selector, offset, dpl);
+    }
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -234,6 +249,8 @@ trap_dispatch(struct trapframe *tf) {
          * IMPORTANT FUNCTIONS:
 	     * run_timer_list
          */
+        ++ticks;
+        run_timer_list();
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -243,10 +260,17 @@ trap_dispatch(struct trapframe *tf) {
         c = cons_getc();
         cprintf("kbd [%03d] %c\n", c, c);
         break;
-    //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
+    //LAB1 CHALLENGE 1 : 2014011434 you should modify below codes.
     case T_SWITCH_TOU:
+        tf->tf_cs = USER_CS;
+        tf->tf_ss = USER_DS;
+        tf->tf_gs = tf->tf_fs = tf->tf_es = tf->tf_ds = USER_DS;
+        tf->tf_eflags = tf->tf_eflags | FL_IOPL_3;
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ss = KERNEL_DS;
+        tf->tf_gs = tf->tf_fs = tf->tf_es = tf->tf_ds = KERNEL_DS;
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
